@@ -9,6 +9,19 @@
     "name": "spark",
     "email": "sparkmemory@163.com"
   },
+  "windows": {
+    "Webview2": {
+      "WebviewGpuIsDisabled": false
+    },
+    "WebviewIsTransparent": false,
+    "WindowIsTranslucent": false
+  },
+  "mac": {
+    "WebviewIsTransparent": false,
+    "Preferences": {
+      "developer_extras": false
+    }
+  },
   "info": {
     "companyName": "sparkmemory",
     "productName": "go-stock",

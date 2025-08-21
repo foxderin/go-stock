@@ -12,11 +12,7 @@
     >
       <!-- eslint-disable vue/no-unused-vars -->
       <template #content="{ item, index }">
-        <t-chat-reasoning v-if="item.role === 'assistant'"  expand-icon-placement="right">
-          <t-chat-loading v-if="isStreamLoad" text="思考中..." />
-<!--          <t-chat-content v-if="item.reasoning.length > 0" :content="item.reasoning" />-->
-        </t-chat-reasoning>
-        <t-chat-content v-if="item.content.length > 0" :content="item.content" />
+        <ChatMessageContent :item="item" :is-stream-load="isStreamLoad" :icon="icon" />
       </template>
       <template #actions="{ item, index }">
         <t-chat-action
@@ -26,36 +22,15 @@
         />
       </template>
       <template #footer>
-<!--        <t-chat-input :stop-disabled="isStreamLoad" @send="inputEnter" @stop="onStop"> </t-chat-input>-->
-          <t-chat-sender
-              ref="chatSenderRef"
-              v-model="inputValue"
-              class="chat-sender"
-              :textarea-props="{
-                placeholder: '请输入消息...',
-              }"
-              :loading="loading"
-              :stop-disabled="isStreamLoad"
-              @send="inputEnter"
-              @stop="onStop"
-          >
-            <template #suffix>
-              <!-- 监听键盘回车发送事件需要在sender组件监听 -->
-              <t-button theme="default" variant="text" size="large" class="btn" @click="inputEnter"> 发送 </t-button>
-            </template>
-            <template #prefix>
-              <NFlex>
-                <NSelect
-                    v-model:value="selectValue"
-                    :options="selectOptions"
-                    label-field="name" value-field="ID"
-                    size="tiny"
-                    style="width: 200px;"
-                />
-              </NFlex>
-            </template>
-          </t-chat-sender>
-
+        <ChatSender
+            v-model:inputValue="inputValue"
+            v-model:selectValue="selectValue"
+            :loading="loading"
+            :is-stream-load="isStreamLoad"
+            :select-options="selectOptions"
+            @send="inputEnter"
+            @stop="onStop"
+        />
       </template>
     </t-chat>
     <t-button v-show="isShowToBottom" variant="text" class="bottomBtn" @click="backBottom">
@@ -66,40 +41,50 @@
   </div>
 </template>
 <script setup lang="ts">
-import {ref, onMounted, h, onBeforeUnmount, onBeforeMount} from 'vue';
-import {ArrowDownIcon, CheckCircleIcon, SystemSumIcon} from 'tdesign-icons-vue-next';
-const fetchCancel = ref(null);
+import {ref, onMounted, h, onBeforeUnmount, onBeforeMount, VNode} from 'vue';
+import {ArrowDownIcon} from 'tdesign-icons-vue-next';
+import {NImage} from "naive-ui";
+import {ChatWithAgent, GetAiConfigs, GetConfig, GetVersionInfo} from "../../wailsjs/go/main/App";
+import {EventsOff, EventsOn} from '../../wailsjs/runtime'
+import 'tdesign-vue-next/es/style/index.css';
+import ChatSender from "./chat/ChatSender.vue";
+import ChatMessageContent from "./chat/ChatMessageContent.vue";
+import {data} from "../../wailsjs/go/models";
+
+interface ChatMessage {
+  avatar: string | (() => VNode);
+  name: string;
+  datetime: string;
+  content: string;
+  role: 'user' | 'assistant' | 'model-change';
+  reasoning: string;
+  duration?: number;
+}
+
+const fetchCancel = ref<{ controller: AbortController } | null>(null);
 const loading = ref(false);
 
 const inputValue = ref('');
 // 流式数据加载中
 const isStreamLoad = ref(false);
 
-const chatRef = ref(null);
+const chatRef = ref<{ scrollToBottom: (options: { behavior: string }) => void } | null>(null);
 const isShowToBottom = ref(false);
 
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
-import {darkTheme, NFlex, NImage,NSelect} from "naive-ui";
-import {ChatWithAgent, GetAiConfigs, GetConfig, GetSponsorInfo, GetVersionInfo} from "../../wailsjs/go/main/App";
-import {EventsOff, EventsOn} from '../../wailsjs/runtime'
-import 'tdesign-vue-next/es/style/index.css';
 
+const selectOptions = ref<data.AIConfig[]>([]);
+const selectValue = ref<number | string>('default');
 
-const allowToolTip = ref(true);
-const chatSenderRef = ref(null);
-const selectOptions = ref([]);
-const selectValue = ref("default");
 onBeforeUnmount(() => {
   EventsOff("agent-message")
 })
+
 EventsOn("agent-message", (data) => {
   console.log(data)
   if(data['role']==="assistant"){
     loading.value = false;
     const lastItem = chatList.value[0];
-    // if (data['reasoning_content']){
-    //   lastItem.reasoning = data['reasoning_content'];
-    // }
     if (data['content']){
       lastItem.content +=data['content'];
     }
@@ -117,36 +102,38 @@ EventsOn("agent-message", (data) => {
     loading.value = false;
   }
 })
+
 onBeforeMount(() => {
   GetAiConfigs().then(res=>{
     console.log(res)
     selectOptions.value = res
-    selectValue.value = res[0].ID
+    if (res && res.length > 0) {
+      selectValue.value = res[0].ID
+    }
   })
 })
 
 onMounted(() => {
-  //chatRef.value.scrollToBottom();
-
   GetConfig().then((res) => {
     if (res.darkTheme) {
       document.documentElement.setAttribute("theme-mode", "dark");
     } else {
-      document.documentElement.removeAttribute("theme-mode");    }
+      document.documentElement.removeAttribute("theme-mode");
+    }
   })
-
 
   GetVersionInfo().then((res) => {
     icon.value = res.icon;
   });
-
 });
 
 // 滚动到底部
 const backBottom = () => {
-  chatRef.value.scrollToBottom({
-    behavior: 'smooth',
-  });
+  if (chatRef.value) {
+    chatRef.value.scrollToBottom({
+      behavior: 'smooth',
+    });
+  }
 };
 // 是否显示回到底部按钮
 const handleChatScroll = function ({ e }) {
@@ -161,14 +148,9 @@ const handleOperation = function (type, options) {
   console.log('handleOperation', type, options);
 };
 // 倒序渲染
-const chatList = ref([
-  // {
-  //   content: `模型由<span>hunyuan</span>变为<span>GPT4</span>`,
-  //   role: 'model-change',
-  //   reasoning: '',
-  // },
+const chatList = ref<ChatMessage[]>([
   {
-    avatar: h(NImage, { src: icon.value, height: '48px', width: '48px'}),
+    avatar: () => h(NImage, { src: icon.value, height: '48px', width: '48px'}),
     name: 'Go-Stock AI',
     datetime: '',
     reasoning: '',
@@ -188,7 +170,7 @@ const chatList = ref([
 
 const onStop = function () {
   if (fetchCancel.value) {
-    fetchCancel.value.controller.close();
+    fetchCancel.value.controller.abort();
     loading.value = false;
     isStreamLoad.value = false;
   }
@@ -199,17 +181,18 @@ const inputEnter = function () {
     return;
   }
   if (!inputValue.value) return;
-  const params = {
+  const params: ChatMessage = {
     avatar: 'https://tdesign.gtimg.com/site/avatar.jpg',
     name: '宇宙无敌大韭菜',
     datetime: new Date().toDateString(),
     content: inputValue.value,
     role: 'user',
+    reasoning: '',
   };
   chatList.value.unshift(params);
   // 空消息占位
-  const params2 = {
-    avatar:  h(NImage, { src: icon.value, height: '48px', width: '48px'}),
+  const params2: ChatMessage = {
+    avatar:  () => h(NImage, { src: icon.value, height: '48px', width: '48px'}),
     name: 'Go-Stock AI',
     datetime: new Date().toDateString(),
     content: '',
@@ -219,7 +202,8 @@ const inputEnter = function () {
   chatList.value.unshift(params2);
   loading.value = true;
   isStreamLoad.value = true;
-  ChatWithAgent(inputValue.value,selectValue.value,0)
+  const agentConfigId = typeof selectValue.value === 'number' ? selectValue.value : (selectOptions.value.length > 0 ? selectOptions.value[0].ID : 0);
+  ChatWithAgent(inputValue.value, agentConfigId, 0)
 };
 </script>
 <style lang="less">

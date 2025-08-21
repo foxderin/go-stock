@@ -722,16 +722,6 @@ onMounted(() => {
                       </n-scrollbar>
                     </n-spin>
                   </n-gi>
-                  <n-gi style="position: fixed;bottom:0;z-index: 9;width: 100%;">
-                    <n-card size="small" style="--wails-draggable:no-drag">
-                      <n-menu style="font-size: 18px;"
-                              v-model:value="activeKey"
-                              mode="horizontal"
-                              :options="menuOptions"
-                              responsive
-                      />
-                    </n-card>
-                  </n-gi>
                 </n-grid>
               </n-flex>
             </n-watermark>
